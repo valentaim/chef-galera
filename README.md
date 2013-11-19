@@ -1,6 +1,7 @@
 Description
 ===========
-Installs Codership's MySQL Galera cluster (http://http://www.codership.com/).
+Installs Codership's MySQL Galera Cluster (http://www.codership.com/) or
+MariaDB Galera Cluster (https://mariadb.com/kb/en/galera/)
 Galera Cluster provides synchronous multi-master replication for MySQL (replication plugin).
 
 * No master failover scripting (automatic failover and recovery)
@@ -11,10 +12,9 @@ Galera Cluster provides synchronous multi-master replication for MySQL (replicat
 
 This cookbook enables you to install a Galera cluster from scratch. At minimum you would probaly only need to change a few attributes like
 
+* ['mysql']['vendor'] = "mariadb"
 * ['mysql']['root_password'] = "password"
 * ['mysql']['tunable']['buffer_pool_size'] = "256M"
-
-You can also deploy our ClusterControl coookbook with the Galera Cluster which provide additional control and monitoring features.
 
 Howto: Chef, MySQL Galera and ClusterControl
 http://support.severalnines.com/entries/21453521-opscode-s-chef-mysql-galera-and-clustercontrol
