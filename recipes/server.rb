@@ -45,8 +45,19 @@ end
 
 # Vagrant host only fix end
 
-install_flag = "/root/.s9s_galera_installed"
+install_flag = "/root/.galera_cluster_installed"
 
+galera_config = data_bag_item('sql_galera_cluster', 'config')
+mysql_tarball = galera_config['mysql_wsrep_tarball_' + node['kernel']['machine']]
+# strip .tar.gz
+mysql_package = mysql_tarball[0..-8]
+
+mysql_wsrep_source = galera_config['mysql_wsrep_source']
+galera_source = galera_config['galera_source']
+
+# MySQL and Galera setup and configuration
+
+# Create MySQL group and user
 group "mysql" do
 end
 
@@ -57,20 +68,14 @@ user "mysql" do
   shell "/bin/false"
 end
 
-galera_config = data_bag_item('s9s_galera', 'config')
-mysql_tarball = galera_config['mysql_wsrep_tarball_' + node['kernel']['machine']]
-# strip .tar.gz
-mysql_package = mysql_tarball[0..-8]
-
-mysql_wsrep_source = galera_config['mysql_wsrep_source']
-galera_source = galera_config['galera_source']
-
+# Download MySQL Source package
 Chef::Log.info "Downloading #{mysql_tarball}"
 remote_file "#{Chef::Config[:file_cache_path]}/#{mysql_tarball}" do
   source "#{mysql_wsrep_source}/" + mysql_tarball
   action :create_if_missing
 end
 
+# Determine the correct Galera source to download
 case node['platform']
 when 'centos', 'redhat', 'fedora', 'suse', 'scientific', 'amazon'
   galera_package = galera_config['galera_package_' + node['kernel']['machine']]['rpm']
@@ -78,12 +83,14 @@ else
   galera_package = galera_config['galera_package_' + node['kernel']['machine']]['deb']
 end
 
+# Download the source package determined from above
 Chef::Log.info "Downloading #{galera_package}"
 remote_file "#{Chef::Config[:file_cache_path]}/#{galera_package}" do
   source "#{galera_source}/" + galera_package
   action :create_if_missing
 end
 
+# ????
 bash "install-mysql-package" do
   user "root"
   code <<-EOH
@@ -93,6 +100,7 @@ bash "install-mysql-package" do
   not_if { File.directory?("#{node['mysql']['install_dir']}/#{mysql_package}") }
 end
 
+# Ensure and existing MySQL packages are purged from the system
 case node['platform']
   when 'centos', 'redhat', 'fedora', 'suse', 'scientific', 'amazon'
     bash "purge-mysql-galera" do
@@ -124,6 +132,7 @@ case node['platform']
     end
 end
 
+# Install extra packages and the galera package already downloaded
 case node['platform']
 when 'centos', 'redhat', 'fedora', 'suse', 'scientific', 'amazon'
   bash "install-galera" do
@@ -146,6 +155,7 @@ else
   end
 end
 
+# Create directories for MySQL
 directory node['mysql']['data_dir'] do
   owner "mysql"
   group "mysql"
@@ -162,18 +172,19 @@ directory node['mysql']['run_dir'] do
   recursive true
 end
 
-# install db to the data directory
+# Install db to the data directory
 execute "setup-mysql-datadir" do
   command "#{node['mysql']['base_dir']}/scripts/mysql_install_db --force --user=mysql --basedir=#{node['mysql']['base_dir']} --datadir=#{node['mysql']['data_dir']}"
   not_if { FileTest.exists?("#{node['mysql']['data_dir']}/mysql/user.frm") }
 end
 
-
+# Copy init script to manage the SQL service
 execute "setup-init.d-mysql-service" do
   command "cp #{node['mysql']['base_dir']}/support-files/mysql.server /etc/init.d/#{node['mysql']['servicename']}"
   not_if { FileTest.exists?("#{install_flag}") }
 end
 
+# Ensure my.conf file is correctly configured
 template "my.cnf" do
   path "#{node['mysql']['conf_dir']}/my.cnf"
   source "my.cnf.erb"
@@ -183,10 +194,13 @@ template "my.cnf" do
 #  notifies :restart, "service[mysql]", :delayed
 end
 
+# Bootstrapping and managing cluster
+
 my_ip = node['ipaddress']
 init_host = galera_config['init_node']
 sync_host = init_host
 
+# Try to sync with a random node in the cluster, falling back the the init host
 hosts = galera_config['galera_nodes']
 Chef::Log.info "init_host = #{init_host}, my_ip = #{my_ip}, hosts = #{hosts}"
 if File.exists?("#{install_flag}") && hosts != nil && hosts.length > 0
@@ -202,6 +216,7 @@ if File.exists?("#{install_flag}") && hosts != nil && hosts.length > 0
   end while my_ip == sync_host
 end
 
+# Update the address of the members of the cluster in the my.cnf file
 wsrep_cluster_address = 'gcomm://'
 if !File.exists?("#{install_flag}") && hosts != nil && hosts.length > 0
   hosts.each do |h|
@@ -219,6 +234,7 @@ bash "set-wsrep-cluster-address" do
   only_if { (galera_config['update_wsrep_urls'] == 'yes') || !FileTest.exists?("#{install_flag}") }
 end
 
+# If we are the init node then we need to start the cluster
 service "init-cluster" do
   service_name node['mysql']['servicename']
   supports :start => true
@@ -227,12 +243,14 @@ service "init-cluster" do
   only_if { my_ip == init_host && !FileTest.exists?("#{install_flag}") }
 end
 
+# Sleep to ensure the init host is dont with its Chef run incase we are provisioning a whole custer at once
 if my_ip != init_host && !File.exists?("#{install_flag}")
 Chef::Log.info "Joiner node sleeping 30 seconds to make sure donor node is up..."
 sleep(node['xtra']['sleep'])
 Chef::Log.info "Joiner node cluster address = gcomm://#{sync_host}:#{node['wsrep']['port']}"
 end
 
+# Start MySQL service
 service "join-cluster" do
   service_name node['mysql']['servicename']
   supports :restart => true, :start => true, :stop => true
@@ -240,6 +258,7 @@ service "join-cluster" do
   only_if { my_ip != init_host && !FileTest.exists?("#{install_flag}") }
 end
 
+# Ensure we have joined the cluster and wait until the sync is complete
 bash "wait-until-synced" do
   user "root"
   code <<-EOH
@@ -256,6 +275,7 @@ bash "wait-until-synced" do
   only_if { my_ip == init_host && !FileTest.exists?("#{install_flag}") }
 end
 
+# Ensure the wresp user has approiate permissions
 bash "set-wsrep-grants-mysqldump" do
   user "root"
   code <<-EOH
@@ -265,6 +285,7 @@ bash "set-wsrep-grants-mysqldump" do
   only_if { my_ip == init_host && (galera_config['sst_method'] == 'mysqldump') && !FileTest.exists?("#{install_flag}") }
 end
 
+# Help secure the default MySQL installation
 bash "secure-mysql" do
   user "root"
   code <<-EOH
@@ -274,6 +295,7 @@ bash "secure-mysql" do
   only_if { my_ip == init_host && (galera_config['secure'] == 'yes') && !FileTest.exists?("#{install_flag}") }
 end
 
+# Ensure the MySQL server service is managed
 service "mysql" do
   supports :restart => true, :start => true, :stop => true
   service_name node['mysql']['servicename']
@@ -281,7 +303,7 @@ service "mysql" do
   only_if { FileTest.exists?("#{install_flag}") }
 end
 
-execute "s9s-galera-installed" do
+execute "galera-cluster-installed" do
   command "touch #{install_flag}"
   action :run
   not_if { FileTest.exists?("#{install_flag}") }

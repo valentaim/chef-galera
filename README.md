@@ -126,8 +126,9 @@ Change History
 ===============
 
 TODO:
-* Handle my.cnf changes after deployment
-* Galera/MySQL version upgrades
+* Allow the installation of MySQL OR MariaDB
+* Reconfigure the deployment to search for nodes to add to the cluster (removing the need to manually specify galera nodes)
+* Off load the installation and repo management to other cookbooks if possible (https://github.com/opscode-cookbooks/mysql and https://github.com/joerocklin/chef-mariadb)
 
 * v0.4 - Vagrant host only fix, attribute names match opscode mysql recipe, update to MySQL version 5.5.29-23.7.3 and Galera 2.4.2
 * v0.3 - Add init_node which specifies the intital donor node.

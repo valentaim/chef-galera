@@ -7,4 +7,3 @@ network["interfaces"]["eth1"]["addresses"].each do |ip, params|
     ipaddress ip
   end
 end
-
