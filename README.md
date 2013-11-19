@@ -1,7 +1,8 @@
 Description
 ===========
 Installs Codership's MySQL Galera Cluster (http://www.codership.com/) or
-MariaDB Galera Cluster (https://mariadb.com/kb/en/galera/)
+MariaDB Galera Cluster (https://mariadb.com/kb/en/galera/).
+
 Galera Cluster provides synchronous multi-master replication for MySQL (replication plugin).
 
 * No master failover scripting (automatic failover and recovery)
@@ -90,7 +91,7 @@ Example cc_galera role:
 Data Bags
 =========
 
-s9s_galera / config.json
+sql_galera_cluster / config.json
 -------------------------
 		{
 		  "id": "config",
