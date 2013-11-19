@@ -124,7 +124,7 @@ State Snapshot Transfer method, 'mysqldump', 'rsync', 'rsync_wan' or 'xtrabackup
 Change History
 ===============
 
-TODO: 
+TODO:
 * Handle my.cnf changes after deployment
 * Galera/MySQL version upgrades
 
