@@ -1,3 +1,4 @@
+name "galera"
 maintainer       "Convergint Technologies LLC"
 maintainer_email "trent.petersen@convergint.com"
 license          "Apache 2.0"
